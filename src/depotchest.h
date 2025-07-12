@@ -26,14 +26,12 @@ public:
 	// overrides
 	bool canRemove() const override { return false; }
 
-	// Cylinder* getParent() const override;
+	Cylinder* getParent() const override;
 	Cylinder* getRealParent() const override { return parent; }
 
-	bool needsSave() { return save; }
 
 private:
 	uint32_t maxDepotItems = 2000;
-	bool save = false;
 };
 
 #endif

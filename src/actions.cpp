@@ -472,13 +472,36 @@ bool Action::configureEvent(const pugi::xml_node& node)
 
 	return true;
 }
+//MARKET SYSTEM FUNCTIONS
 
-bool Action::loadFunction(const pugi::xml_attribute& attr, bool)
+bool enterMarket(Player* player, Item*, const Position&, Thing*, const Position&, bool)
 {
-	std::cout << "[Warning - Action::loadFunction] Function \"" << attr.as_string() << "\" does not exist."
-	          << std::endl;
-	return false;
+    if (player->getLastDepotId() == -1) {
+        return false;
+    }
+
+    player->sendMarketEnter(player->getLastDepotId());
+    return true;
 }
+
+bool Action::loadFunction(const pugi::xml_attribute& attr, bool isScripted)
+{
+	const char* functionName = attr.as_string();
+	if (strcasecmp(functionName, "market") == 0) {
+		function = enterMarket;
+	} else {
+		if (!isScripted) {
+			std::cout << "[Warning - Action::loadFunction] Function \"" << functionName << "\" does not exist." << std::endl;
+			return false;
+		}
+	}
+
+	if (!isScripted) {
+		scripted = false;
+	}
+	return true;
+}
+// END OF MARKET FUNCTIONS
 
 std::string_view Action::getScriptEventName() const { return "onUse"; }
 

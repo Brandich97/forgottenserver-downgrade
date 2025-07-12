@@ -136,6 +136,13 @@ private:
 	void parseOpenPrivateChannel(NetworkMessage& msg);
 	void parseCloseChannel(NetworkMessage& msg);
 
+	//market methods
+		void parseMarketLeave();
+		void parseMarketBrowse(NetworkMessage& msg);
+		void parseMarketCreateOffer(NetworkMessage& msg);
+		void parseMarketCancelOffer(NetworkMessage& msg);
+		void parseMarketAcceptOffer(NetworkMessage& msg);
+		
 	// Send functions
 	void sendChannelMessage(std::string_view author, std::string_view text, SpeakClasses type, uint16_t channel);
 	void sendClosePrivate(uint16_t channelId);

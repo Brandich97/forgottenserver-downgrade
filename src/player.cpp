@@ -29,8 +29,10 @@ MuteCountMap Player::muteCountMap;
 uint32_t Player::playerAutoID = 0x10000000;
 std::forward_list<Condition*> Player::storedConditionList;
 
-Player::Player(ProtocolGame_ptr p) : Creature(), lastPing(OTSYS_TIME()), lastPong(lastPing), client(std::move(p))
+Player::Player(ProtocolGame_ptr p) : Creature(), lastPing(OTSYS_TIME()), lastPong(lastPing), inbox(new Inbox(ITEM_INBOX)), client(std::move(p))
 {
+	inbox->incrementReferenceCounter();
+
 	experienceRate.fill(100);
 }
 
@@ -42,6 +44,13 @@ Player::~Player()
 			item->decrementReferenceCounter();
 		}
 	}
+
+	
+	for (const auto& it : depotLockerMap) {
+		it.second->removeInbox(inbox);
+	}
+
+	inbox->decrementReferenceCounter();
 
 	setWriteItem(nullptr);
 	setEditHouse(nullptr);
@@ -755,10 +764,14 @@ DepotLocker* Player::getDepotLocker(uint32_t depotId)
 {
 	auto it = depotLockerMap.find(depotId);
 	if (it != depotLockerMap.end()) {
+		inbox->setParent(it->second.get());
 		return it->second.get();
 	}
 
 	it = depotLockerMap.emplace(depotId, new DepotLocker(ITEM_LOCKER)).first;
+	it->second->setDepotId(depotId);
+	it->second->internalAddThing(Item::CreateItem(ITEM_MARKET));
+	it->second->internalAddThing(inbox);
 	it->second->setDepotId(static_cast<uint16_t>(depotId));
 	it->second->internalAddThing(getDepotChest(depotId, true));
 	return it->second.get();

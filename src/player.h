@@ -238,7 +238,15 @@ public:
 
 	void setGroup(Group* newGroup) { group = newGroup; }
 	Group* getGroup() const { return group; }
-
+//MARKET FUNCTIONS
+	void setInMarket(bool value) {
+			inMarket = value;
+		}
+		bool isInMarket() const {
+			return inMarket;
+		}
+		//END OF MARKET FUNCTIONS
+		
 	void setLastDepotId(int16_t newId) { lastDepotId = newId; }
 	int16_t getLastDepotId() const { return lastDepotId; }
 

@@ -2108,7 +2108,10 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::MAX_PACKETS_PER_SECOND);
 	registerEnumIn("configKeys", ConfigManager::STAMINA_REGEN_MINUTE);
 	registerEnumIn("configKeys", ConfigManager::STAMINA_REGEN_PREMIUM);
-
+	// MARKET
+	registerMethod("Player", "getDepotChest", LuaScriptInterface::luaPlayerGetDepotChest);
+	registerMethod("Player", "getInbox", LuaScriptInterface::luaPlayerGetInbox);
+	
 	// os
 	registerMethod("os", "mtime", LuaScriptInterface::luaSystemTime);
 	registerMethod("os", "ntime", LuaScriptInterface::luaSystemNanoTime);
@@ -2702,7 +2705,49 @@ int LuaScriptInterface::luaGetDepotId(lua_State* L)
 	lua_pushinteger(L, depotLocker->getDepotId());
 	return 1;
 }
+//MARKET FUNCTIONS
 
+int LuaScriptInterface::luaPlayerGetDepotChest(lua_State* L)
+{
+	// player:getDepotChest(depotId[, autoCreate = false])
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	uint32_t depotId = getNumber<uint32_t>(L, 2);
+	bool autoCreate = getBoolean(L, 3, false);
+	DepotChest* depotChest = player->getDepotChest(depotId, autoCreate);
+	if (depotChest) {
+		player->setLastDepotId(depotId); // FIXME: workaround for #2251
+		pushUserdata<Item>(L, depotChest);
+		setItemMetatable(L, -1, depotChest);
+	} else {
+		pushBoolean(L, false);
+	}
+	return 1;
+}
+
+int LuaScriptInterface::luaPlayerGetInbox(lua_State* L)
+{
+	// player:getInbox()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	Inbox* inbox = player->getInbox();
+	if (inbox) {
+		pushUserdata<Item>(L, inbox);
+		setItemMetatable(L, -1, inbox);
+	} else {
+		pushBoolean(L, false);
+	}
+	return 1;
+}
+//END OF MARKET FUNTIONS
 int LuaScriptInterface::luaAddEvent(lua_State* L)
 {
 	// addEvent(callback, delay, ...)

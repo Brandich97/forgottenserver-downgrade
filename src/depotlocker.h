@@ -22,7 +22,7 @@ public:
 	uint16_t getDepotId() const { return depotId; }
 	void setDepotId(uint16_t depotId) { this->depotId = depotId; }
 
-	bool needsSave() { return save; }
+	ReturnValue queryAdd(int32_t index, const Thing& thing, uint32_t count, uint32_t flags, Creature* actor = nullptr) const override;
 
 	void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index,
 	                         cylinderlink_t link = LINK_OWNER) override;

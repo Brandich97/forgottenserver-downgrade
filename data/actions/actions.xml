@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <actions>
+	<!-- Market System -->
+	<action itemid="5201" function="market" />
 	<!-- Quests -->
 	<action itemid="1740" script="quests/quests.lua" />
 	<action fromid="1747" toid="1749" script="quests/quests.lua" />

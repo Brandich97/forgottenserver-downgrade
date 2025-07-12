@@ -4,7 +4,9 @@
 #ifndef FS_CONST_H
 #define FS_CONST_H
 
-inline constexpr int32_t NETWORKMESSAGE_MAXSIZE = 24590;
+static constexpr int32_t NETWORKMESSAGE_MAXSIZE = 65500;
+static constexpr int32_t MIN_MARKET_FEE = 20;
+static constexpr int32_t MAX_MARKET_FEE = 100000;
 
 enum MagicEffectClasses : uint8_t
 {
@@ -402,6 +404,9 @@ enum item_t : uint16_t
 
 	ITEM_DEPOT = 2594,
 	ITEM_LOCKER = 2589,
+
+	ITEM_INBOX = 5200,
+	ITEM_MARKET = 5201,
 
 	ITEM_MALE_CORPSE = 3058,
 	ITEM_FEMALE_CORPSE = 3065,
