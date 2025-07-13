@@ -8,3 +8,5 @@ dofile('data/lib/compat/compat.lua')
 dofile('data/lib/debugging/dump.lua')
 dofile('data/lib/debugging/lua_version.lua')
 dofile('data/lib/core/json.lua')
+
+dofile('data/lib/taskSystem.lua')

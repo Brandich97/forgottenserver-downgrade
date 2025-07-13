@@ -10,6 +10,10 @@
 #include "game.h"
 #include "monster.h"
 #include "scheduler.h"
+#include "luascript.h"
+#include "player.h"
+
+extern LuaEnvironment g_luaEnvironment;
 
 extern CreatureEvents* g_creatureEvents;
 extern Events* g_events;
@@ -1132,20 +1136,85 @@ void Creature::onAttackedCreatureDrainHealth(Creature* target, int32_t points)
 	target->addDamagePoints(this, points);
 }
 
-bool Creature::onKilledCreature(Creature* target, bool)
+
+
+bool Creature::onKilledCreature(Creature* target, bool lastHit)
 {
-	if (master) {
-		master->onKilledCreature(target);
-	}
+    // CÓDIGO ORIGINAL DO TFS - NÃO REMOVER
+    if (master) {
+        master->onKilledCreature(target);
+    }
 
-	// scripting event - onKill
-	const CreatureEventList& killEvents = getCreatureEvents(CREATURE_EVENT_KILL);
-	for (CreatureEvent* killEvent : killEvents) {
-		killEvent->executeOnKill(this, target);
-	}
-	return false;
+    // CÓDIGO ORIGINAL DO TFS - PARA DISPARAR EVENTOS SCRIPTING PADRÃO (ONKILL)
+    const CreatureEventList& killEvents = getCreatureEvents(CREATURE_EVENT_KILL);
+    for (CreatureEvent* killEvent : killEvents) {
+        killEvent->executeOnKill(this, target);
+    }
+
+    // >>>>> INÍCIO DO HOOK PARA O SEU SISTEMA DE TASKS <<<<<
+    // Este hook garante que TaskSystem.onKill seja chamado quando um player mata um monstro.
+
+    Player* killerPlayer = this->getPlayer(); // Obtém o objeto Player* se 'this' for um jogador
+    Monster* killedMonster = target->getMonster(); // Obtém o objeto Monster* se 'target' for um monstro
+
+    // Apenas se o killer for um Player e o target for um Monster.
+    if (killerPlayer && killedMonster) {
+        // Opcional: std::cout << "[C++ Hook Debug] Player killed a monster. Attempting to call TaskSystem.onKill." << std::endl;
+
+        // Tenta reservar o ambiente de script Lua.
+        if (LuaScriptInterface::reserveScriptEnv()) {
+            ScriptEnvironment* env = LuaScriptInterface::getScriptEnv();
+            lua_State* L = g_luaEnvironment.getLuaState(); // Obtém o estado Lua global
+
+            // 1. Empurre a tabela global 'TaskSystem' para a stack Lua
+            lua_getglobal(L, "TaskSystem");
+
+            // 2. Verifique se o que foi pego é realmente uma tabela
+            if (lua_istable(L, -1)) {
+                // 3. Empurre a função 'onKill' de dentro da tabela 'TaskSystem'
+                lua_getfield(L, -1, "onKill");
+
+                // 4. Verifique se o que foi pego é realmente uma função
+                if (lua_isfunction(L, -1)) {
+                    // 5. Empurre os argumentos para a função Lua:
+                    // Argumento 1: o killer (o player)
+                    Lua::pushUserdata<Creature>(L, killerPlayer);
+                    Lua::setCreatureMetatable(L, -1, killerPlayer);
+
+                    // Argumento 2: o alvo (o monstro que morreu)
+                    Lua::pushUserdata<Creature>(L, killedMonster);
+                    Lua::setCreatureMetatable(L, -1, killedMonster);
+
+                    // 6. Chame a função Lua: 2 argumentos, 0 valores de retorno esperados.
+                    int result = lua_pcall(L, 2, 0, 0); // Usa lua_pcall para segurança
+
+                    if (result != LUA_OK) {
+                        // MANTER ESTAS LINHAS (São essenciais para depurar erros Lua em runtime):
+                        std::cerr << "[Error] C++ Hook: Failed to call TaskSystem.onKill Lua function (Lua error code: " << result << "). Message: " << (lua_isstring(L, -1) ? lua_tostring(L, -1) : "N/A") << std::endl;
+                        lua_pop(L, 1); // Limpa a mensagem de erro da stack
+                    } else {
+                        // Opcional: std::cout << "[C++ Hook Debug] TaskSystem.onKill Lua function called successfully." << std::endl;
+                    }
+                } else {
+                    // MANTER ESTA LINHA (É um aviso importante):
+                    std::cerr << "[Warning] C++ Hook: 'TaskSystem.onKill' is not a Lua function. Script might be corrupted or not properly defined." << std::endl;
+                    lua_pop(L, 1);
+                }
+            } else {
+                // MANTER ESTA LINHA (É um aviso importante):
+                std::cerr << "[Warning] C++ Hook: 'TaskSystem' global is not a Lua table or does not exist. Ensure taskSystem.lua is loaded correctly." << std::endl;
+                lua_pop(L, 1);
+            }
+            LuaScriptInterface::resetScriptEnv(); // Libera o ambiente Lua após o uso
+        } else {
+            // MANTER ESTA LINHA (É um erro importante):
+            std::cerr << "[Error] C++ Hook: Failed to reserve Lua script environment for TaskSystem.onKill." << std::endl;
+        }
+    }
+    // >>>>> FIM DO HOOK PARA O SEU SISTEMA DE TASKS <<<<<
+
+    return false; // Manter o retorno original
 }
-
 void Creature::onGainExperience(uint64_t gainExp, Creature* target)
 {
 	if (gainExp == 0 || !master) {
