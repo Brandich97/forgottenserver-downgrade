@@ -28,6 +28,7 @@ configTasks = {
     [1] = {
         nameOfTheTask = "Troll",
         looktype = { type = 15 },
+        monsters = { "Troll", "Frost Troll", "Swamp Troll" },
         minKills = 50,
         maxKills = 500,
         baseKills = 50, -- A recompensa abaixo é baseada neste número de abates
@@ -38,6 +39,7 @@ configTasks = {
     [2] = {
         nameOfTheTask = "Rotworm",
         looktype = { type = 26 },
+        monsters = { "Rotworm", "Carrion Worm" },
         minKills = 100,
         maxKills = 1000,
         baseKills = 100,
@@ -48,6 +50,7 @@ configTasks = {
     [3] = {
         nameOfTheTask = "Minotaur",
         looktype = { type = 25 },
+        monsters = {"Minotaur"},
         minKills = 100,
         maxKills = 1000,
         baseKills = 100,
@@ -59,43 +62,31 @@ configTasks = {
 
     list = {},
     baseStorage = 1500,
-    maximumTasks = 3, -- Max tasks ativas
+    maximumTasks = 2, -- Max tasks ativas
     countForParty = true,
     maxDist = 7,
     players = {},
 
-   -- NOVO CÓDIGO PARA a função loadDatabase
-
 loadDatabase = function()
-    if (#TaskSystem.list > 0) then
-      -- Já carregado, não faz nada
-        return true
-    end
-
+    if (#TaskSystem.list > 0) then return true end
     print("[Task System] Loading Task Database...")
-    -- Limpa a lista para garantir que está vazia antes de carregar
     TaskSystem.list = {}
-    
-    -- Usamos ipairs para iterar sobre a tabela configTasks
     for id, taskConfig in ipairs(TaskSystem.configTasks) do
         table.insert(TaskSystem.list, {
             id = id,
-            name = taskConfig.nameOfTheTask,
+            name = taskConfig.displayName or taskConfig.nameOfTheTask, -- MUDOU DE nameOfTheTask
+            monsters = taskConfig.monsters, -- NOVO CAMPO
             looktype = taskConfig.looktype,
-            -- Novos campos adicionados:
             minKills = taskConfig.minKills,
             maxKills = taskConfig.maxKills,
             baseKills = taskConfig.baseKills,
-            -- Alteração nos nomes dos campos de recompensa
-            exp = taskConfig.rewards.baseExpReward,
-            taskPoints = taskConfig.rewards.basePointsReward or 0
+            exp = taskConfig.rewards.baseExpReward
         })
     end
     print("[Task System] Task Database Loaded. Total tasks: " .. #TaskSystem.list)
     return true
 end,
 
--- NOVO CÓDIGO PARA a função getCurrentTasks
 
 getCurrentTasks = function(player)
     local tasks = {}
@@ -245,13 +236,16 @@ onKill = function(player, target)
     local targetName = target:getName():lower()
     local foundTaskConfig = nil
     
-    -- Encontra a configuração da task baseada no nome do monstro
-    for id, taskConfig in ipairs(TaskSystem.configTasks) do
-        if taskConfig.nameOfTheTask:lower() == targetName then
-            foundTaskConfig = taskConfig
-            foundTaskConfig.id = id -- Adiciona o ID para referência
-            break
+      -- Procura o monstro morto na lista de monstros de cada task
+   for id, taskConfig in ipairs(TaskSystem.configTasks) do
+        for _, monsterName in ipairs(taskConfig.monsters) do
+            if monsterName:lower() == targetName then
+                foundTaskConfig = taskConfig
+                foundTaskConfig.id = id -- Adiciona o ID para referência
+                break
+            end
         end
+        if foundTaskConfig then break end
     end
 
     if not foundTaskConfig then
