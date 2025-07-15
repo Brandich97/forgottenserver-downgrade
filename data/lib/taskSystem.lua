@@ -28,7 +28,12 @@ configTasks = {
     [1] = {
         nameOfTheTask = "Troll",
         looktype = { type = 15 },
-        monsters = { "Troll", "Frost Troll", "Swamp Troll" },
+        monsters = {
+            {name = "Troll", looktype = 15},
+            {name = "Frost Troll", looktype = 53},
+            {name = "Swamp Troll", looktype = 76},
+            {name = "Troll Champion", looktype = 281}
+            },
         minKills = 50,
         maxKills = 500,
         baseKills = 50, -- A recompensa abaixo é baseada neste número de abates
@@ -39,7 +44,10 @@ configTasks = {
     [2] = {
         nameOfTheTask = "Rotworm",
         looktype = { type = 26 },
-        monsters = { "Rotworm", "Carrion Worm" },
+        monsters = {
+            {name = "Rotworm", looktype = 26},
+            {name = "Carrion Worm", looktype = 192}
+            },
         minKills = 100,
         maxKills = 1000,
         baseKills = 100,
@@ -50,7 +58,23 @@ configTasks = {
     [3] = {
         nameOfTheTask = "Minotaur",
         looktype = { type = 25 },
-        monsters = {"Minotaur"},
+        monsters = {
+            {name = "Minotaur", looktype = 25},
+        },
+        minKills = 100,
+        maxKills = 1000,
+        baseKills = 100,
+        rewards = {
+            baseExpReward = 500,
+        }
+    },
+     [4] = {
+        nameOfTheTask = "Cyclops",
+        looktype = { type = 22 },
+        monsters = {
+            {name = "Cyclops", looktype = 22},
+            {name = "Cyclops Drone", looktype = 280},
+        },
         minKills = 100,
         maxKills = 1000,
         baseKills = 100,
@@ -62,6 +86,7 @@ configTasks = {
 
     list = {},
     baseStorage = 1500,
+    taskCooldownStorage = 7500,
     maximumTasks = 2, -- Max tasks ativas
     countForParty = true,
     maxDist = 7,
@@ -72,11 +97,29 @@ loadDatabase = function()
     print("[Task System] Loading Task Database...")
     TaskSystem.list = {}
     for id, taskConfig in ipairs(TaskSystem.configTasks) do
+        -- Garante que o looktype principal seja uma tabela
+        local mainLooktype = taskConfig.looktype
+        if type(mainLooktype) == 'number' then
+            mainLooktype = {type = mainLooktype}
+        end
+
+        -- Garante que o looktype de cada monstro seja uma tabela
+        local monsterList = {}
+        if taskConfig.monsters then
+            for _, monster in ipairs(taskConfig.monsters) do
+                local looktypeData = monster.looktype
+                if type(looktypeData) == 'number' then
+                    looktypeData = {type = looktypeData}
+                end
+                table.insert(monsterList, {name = monster.name, looktype = looktypeData})
+            end
+        end
+
         table.insert(TaskSystem.list, {
             id = id,
-            name = taskConfig.displayName or taskConfig.nameOfTheTask, -- MUDOU DE nameOfTheTask
-            monsters = taskConfig.monsters, -- NOVO CAMPO
-            looktype = taskConfig.looktype,
+            name = taskConfig.displayName or taskConfig.nameOfTheTask,
+            monsters = monsterList,
+            looktype = mainLooktype,
             minKills = taskConfig.minKills,
             maxKills = taskConfig.maxKills,
             baseKills = taskConfig.baseKills,
@@ -86,7 +129,6 @@ loadDatabase = function()
     print("[Task System] Task Database Loaded. Total tasks: " .. #TaskSystem.list)
     return true
 end,
-
 
 getCurrentTasks = function(player)
     local tasks = {}
@@ -124,6 +166,15 @@ onAction = function(player, data)
     elseif (action == 'hide') then
         TaskSystem.players[player:getGuid()] = nil
     elseif (action == 'start') then
+        local cooldownStorage = TaskSystem.taskCooldownStorage + entryId
+        local cooldownEndTime = player:getStorageValue(cooldownStorage)
+
+        if cooldownEndTime and os.time() < cooldownEndTime then
+            local hoursLeft = math.ceil((cooldownEndTime - os.time()) / 3600)
+            local message = string.format("You must wait approximately %d more hours to start this task again.", hoursLeft)
+            return player:sendExtendedOpcode(215, json.encode({ message = message, color = 'red' }))
+        end
+        
         local quantity = tonumber(data['quantity'])
         if not entryId or not quantity then
             return
@@ -213,7 +264,9 @@ killForPlayer = function(player, taskConfig)
         -- Limpa as storages
         player:setStorageValue(progressStorage, -1)
         player:setStorageValue(metadataStorage, -1)
-        
+        -- INICIA O COOLDOWN DE 24 HORAS
+        player:setStorageValue(TaskSystem.taskCooldownStorage + taskConfig.id, os.time() + (24 * 60 * 60))
+
         -- Se a janela estiver aberta, manda uma mensagem e atualiza
         if (TaskSystem.players[player:getGuid()]) then
             player:sendExtendedOpcode(215, json.encode({ message = "Task completed!", color = 'lime' }))
@@ -229,35 +282,28 @@ end, -- Fim da nova killForPlayer
 -- NOVO CÓDIGO para a função onKill (levemente ajustada para passar o taskConfig)
 
 onKill = function(player, target)
-    if not TaskSystem.list or #TaskSystem.list == 0 then
-        TaskSystem.loadDatabase()
-    end
-
+    if not TaskSystem.list or #TaskSystem.list == 0 then TaskSystem.loadDatabase() end
     local targetName = target:getName():lower()
     local foundTaskConfig = nil
-    
-      -- Procura o monstro morto na lista de monstros de cada task
-   for id, taskConfig in ipairs(TaskSystem.configTasks) do
-        for _, monsterName in ipairs(taskConfig.monsters) do
-            if monsterName:lower() == targetName then
-                foundTaskConfig = taskConfig
-                foundTaskConfig.id = id -- Adiciona o ID para referência
-                break
+
+    for id, taskConfig in ipairs(TaskSystem.configTasks) do
+        if taskConfig.monsters then
+            for _, monster in ipairs(taskConfig.monsters) do
+                if monster.name:lower() == targetName then
+                    foundTaskConfig = taskConfig
+                    foundTaskConfig.id = id
+                    break
+                end
             end
         end
         if foundTaskConfig then break end
     end
 
-    if not foundTaskConfig then
-        return true -- Monstro não pertence a nenhuma task
-    end
+    if not foundTaskConfig then return true end
 
-    -- A lógica de party permanece a mesma
     local party = player:getParty()
     local tpos = target:getPosition()
-
     if (TaskSystem.countForParty and party) then
-        -- Checa todos os membros da party na tela
         for _, member in ipairs(party:getMembers()) do
             if member:isPlayer() and member:getPosition():isNearTo(tpos, TaskSystem.maxDist) then
                 TaskSystem.killForPlayer(member, foundTaskConfig)
@@ -266,17 +312,23 @@ onKill = function(player, target)
     else
         TaskSystem.killForPlayer(player, foundTaskConfig)
     end
-
     return true
 end,
-   
+
 sendData = function(player)
     if not TaskSystem.list or #TaskSystem.list == 0 then
         TaskSystem.loadDatabase()
     end
 
     local playerTasks = TaskSystem.getCurrentTasks(player)
-    
+     for _, task in ipairs(TaskSystem.list) do
+        local cooldownEndTime = player:getStorageValue(TaskSystem.taskCooldownStorage + task.id)
+        if cooldownEndTime and cooldownEndTime > os.time() then
+            task.cooldown = cooldownEndTime
+        else
+            task.cooldown = nil -- Garante que não tenha lixo de cooldowns antigos
+        end
+    end
     -- Pega os pontos de task do jogador
     local points = player:getStorageValue(taskPointStorage) or 0
 
@@ -292,3 +344,27 @@ sendData = function(player)
 end
 }
 TaskSystem.loadDatabase()
+function MonsterType:getTaskOutfit()
+  local outfit = self:outfit()
+  return { type = outfit.lookType, head = outfit.lookHead, body = outfit.lookBody, legs = outfit.lookLegs, feet = outfit.lookFeet, addons = outfit.lookAddons }
+end
+
+loadDatabase = function()
+    if (#TaskSystem.list > 0) then return true end
+    print("[Task System] Loading Task Database...")
+    TaskSystem.list = {}
+    for id, taskConfig in ipairs(TaskSystem.configTasks) do
+        table.insert(TaskSystem.list, {
+            id = id,
+            name = taskConfig.displayName or taskConfig.nameOfTheTask,
+            monsters = taskConfig.monsters, -- Envia a tabela completa
+            looktype = taskConfig.looktype,
+            minKills = taskConfig.minKills,
+            maxKills = taskConfig.maxKills,
+            baseKills = taskConfig.baseKills,
+            exp = taskConfig.rewards.baseExpReward
+        })
+    end
+    print("[Task System] Task Database Loaded. Total tasks: " .. #TaskSystem.list)
+    return true
+end
